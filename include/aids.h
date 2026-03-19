@@ -367,17 +367,11 @@ size_t hm_hash_string(String);
     typedef struct name name;\
     struct name##_
 
-#define EndBaseClass(name)\
-    struct name##_;\
+//should error if the vaargs is more than one
+#define EndClass(name,...)\
     typedef struct name name;\
     struct name {\
-        struct name##_;\
-    };\
-
-#define EndClass(name, parent)\
-    typedef struct name name;\
-    struct name {\
-        parent;\
+        __VA_ARGS__;\
         struct name##_;\
     };
 
