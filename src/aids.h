@@ -361,18 +361,24 @@ size_t hm_hash_string(String);
      })
 //TASK(20260218-083256-729-n6-649): add more functions for hashmaps
 
-//WARNIGN requires `-fms-extensions` to function
-#define BaseClass(name, feilds)\
+//WARNING requires `-fms-extensions` to function
+//
+#define StartClass(name)\
+    typedef struct name name;\
+    struct name##_
+
+#define EndBaseClass(name)\
+    struct name##_;\
     typedef struct name name;\
     struct name {\
-        struct feilds;\
-    };
+        struct name##_;\
+    };\
 
-#define Class(name, parent, feilds)\
+#define EndClass(name, parent)\
     typedef struct name name;\
     struct name {\
         parent;\
-        struct feilds;\
+        struct name##_;\
     };
 
 #define constructor(name, ...)\

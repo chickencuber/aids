@@ -2,10 +2,13 @@
 #include "aids.h"
 
 
-BaseClass(Animal, {
+
+StartClass(Animal) {
     int name;
     METHOD(void, speak, Animal* self); 
-}) 
+};
+
+EndBaseClass(Animal);
 void Animal_speak(Animal* self) {
     printf("the animal %d spoke\n", self->name);
 }
@@ -14,10 +17,11 @@ constructor(Animal, int name) {
     self->speak=Animal_speak;
 }
 
-Class(Dog, Animal, {
+StartClass(Dog) {
     int bark_volume;
     METHOD(void, bark, Dog* self); 
-})
+};
+EndClass(Dog, Animal);
 
 void Dog_speak(Dog* self) {
     printf("the dog %d spoke\n", self->name);
