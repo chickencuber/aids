@@ -8,7 +8,7 @@ StartClass(Animal) {
     METHOD(void, speak, Animal* self); 
 };
 
-EndBaseClass(Animal);
+EndClass(Animal);
 void Animal_speak(Animal* self) {
     printf("the animal %d spoke\n", self->name);
 }
