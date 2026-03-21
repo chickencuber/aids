@@ -1,49 +1,35 @@
 #include <stdio.h>
-#include "aids.h"
+#include <aids.h>
 
 
-
-StartClass(Animal) {
-    int name;
-    METHOD(void, speak, Animal* self); 
-};
-
-EndClass(Animal);
-void Animal_speak(Animal* self) {
-    printf("the animal %d spoke\n", self->name);
-}
-constructor(Animal, int name) {
-    self->name = name;
-    self->speak=Animal_speak;
-}
-
-StartClass(Dog) {
-    int bark_volume;
-    METHOD(void, bark, Dog* self); 
-};
-EndClass(Dog, Animal);
-
-void Dog_speak(Dog* self) {
-    printf("the dog %d spoke\n", self->name);
-}
-void Dog_bark(Dog* self) {
-    printf("the dog %d barked with volume %d\n", self->name, self->bark_volume);
-}
-constructor(Dog, int name, int bark_volume){
-    SUPER(Animal, name);
-    self->bark_volume = bark_volume; 
-    self->bark=Dog_bark;
-    self->speak=Dog_speak;
-}
-
-
-void make_animal_speak(Animal* animal) {
-    animal->speak(animal);
-}
+HM(String, int) h;
 
 int main() {
-    Dog* dog = new_heap(&DEFAULT_ALLOCATOR, Dog, 2, 5);
-    dog->bark(dog);
-    make_animal_speak(dog);
-    FREE(&DEFAULT_ALLOCATOR, dog);
+    printf("=== Arena Test ===\n");
+    ArenaAllocator arena = arena_create(&DEFAULT_ALLOCATOR, 1024);
+
+    int* numbers = ALLOC(&arena, 10 * sizeof(int));
+    if(numbers) {
+        for(int i=0;i<10;i++) numbers[i] = i*2;
+        for(int i=0;i<10;i++) printf("%d ", numbers[i]);
+        printf("\n");
+    }
+
+    arena_destroy(&arena);
+
+    printf("=== Scratch Test ===\n");
+    ScratchAllocator scratch = scratch_create(&DEFAULT_ALLOCATOR);
+
+    char* s1 = ALLOC(&scratch, 20);
+    strcpy(s1, "Hello Scratch!");
+    char* s2 = ALLOC(&scratch, 50);
+    strcpy(s2, "More allocations in the scratch arena.");
+
+    printf("%s\n", s1);
+    printf("%s\n", s2);
+
+    scratch_destroy(&scratch);
+    printf("Scratch allocator destroyed safely.\n");
+
+    return 0;
 }

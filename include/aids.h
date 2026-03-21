@@ -6,6 +6,16 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <stdint.h>
+
+
+#ifdef _WIN32
+#define EXPORT __declspec(dllexport)
+#define IMPORT __declspec(dllimport)
+#else
+#define EXPORT 
+#define IMPORT
+#endif
 
 #define STRING "%.*s"
 #define FMTSTRING(s) (int)(s)->len, (s)->data
@@ -32,7 +42,7 @@ struct Allocator {
     IMPL_ALLOCATOR;
 };
 
-extern Allocator DEFAULT_ALLOCATOR;
+IMPORT extern Allocator DEFAULT_ALLOCATOR;
 
 #define ALLOC(allocator, size) (allocator)->alloc((Allocator*)(allocator), size)
 #define CALLOC(alloc, nmemb, size) (alloc)->calloc((Allocator*)(alloc), nmemb, size)
@@ -181,21 +191,56 @@ typedef struct {
     DA(void*) pointers;
 } TrackingAllocator;
 
-void tracking_destroy(TrackingAllocator*);
-TrackingAllocator tracking_create(Allocator*);
+IMPORT void tracking_destroy(TrackingAllocator*);
+IMPORT TrackingAllocator tracking_create(Allocator*);
+
+#define UNUSED(a) (void)(a)
+
+typedef struct {
+    IMPL_ALLOCATOR;
+    Allocator* allocator;
+    uint8_t* data;
+    size_t offset, cap;
+} ArenaAllocator;
+
+IMPORT void arena_destroy(ArenaAllocator*);
+IMPORT ArenaAllocator arena_create(Allocator*, size_t);
+IMPORT void arena_free_all(ArenaAllocator*);
+
+#ifndef REGION_SIZE
+#define REGION_SIZE 1024 * 64 //64 KiB
+#endif
+
+
+typedef struct Region Region;
+struct Region {
+    uint8_t* data;
+    size_t offset, cap;
+    Region* next;
+};
+
+typedef struct {
+    IMPL_ALLOCATOR;
+    Allocator* allocator;
+    Region* first, *last;
+} ScratchAllocator;
+
+IMPORT void scratch_destroy(ScratchAllocator*);
+IMPORT ScratchAllocator scratch_create(Allocator*);
+
 //TASK(20260217-112915-392-n6-805): add more allocators
 
 typedef DA(char) String;
 
-bool string_compare(String, String);
-bool str_cmp(const char*, const char*);
-String string_from(const char*, Allocator*);
-String string_clone(String*, Allocator*);
-String string_create(Allocator*);
-char* from_string(String*, Allocator*);
-void append_char(String*, char);
-void append_cstr(String*, char*);
-void append_string(String*, String*);
+IMPORT bool string_compare(String, String);
+IMPORT bool str_cmp(const char*, const char*);
+IMPORT String string_from(const char*, Allocator*);
+IMPORT String string_clone(String*, Allocator*);
+IMPORT String string_create(Allocator*);
+IMPORT char* from_string(String*, Allocator*);
+IMPORT void append_char(String*, char);
+IMPORT void append_cstr(String*, char*);
+IMPORT void append_string(String*, String*);
 
 #ifndef HM_SIZE
 #define HM_SIZE 103 
@@ -228,9 +273,9 @@ char*: (size_t(*)(char*))hm_hash_cstr,\
 String: hm_hash_string
 
 #define _DUMMY_KEY(hm) ((typeof((hm)->buckets[0].data->key)){0})
-size_t hm_hash_cstr(const char*);
-size_t hm_hash_int(int);
-size_t hm_hash_string(String);
+IMPORT size_t hm_hash_cstr(const char*);
+IMPORT size_t hm_hash_int(int);
+IMPORT size_t hm_hash_string(String);
 
 #define hm_init(hm, allocator)\
     do {\
@@ -242,17 +287,11 @@ size_t hm_hash_string(String);
 #define COMPARE
 #endif
 
-#define _CALL(c, a, b) _Generic((c),\
-        void*: ((bool (*)(typeof(a), typeof(b))) c)(a, b),\
-        int: a == b/*NOLINT*/\
-        )
-
-#define _EQUALS(a, b) _CALL(_Generic((a),\
-            const char*: (void*) str_cmp,\
-            String: (void*) string_compare,\
+#define _EQUALS(a, b) _Generic((a),\
+            const char*: str_cmp,\
+            String:string_compare\
             COMPARE\
-            default: 0\
-            ), (a), (b))
+            )(a, b)
 
 #define hm_set(hm, _nkey, _nvalue)\
     do {\
@@ -400,6 +439,7 @@ size_t hm_hash_string(String);
 #endif
 
 #ifdef AIDS_IMPLEMENTATION
+#include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -419,7 +459,7 @@ void dfree(Allocator* _, void* ptr) {
     free(ptr);
 }
 
-Allocator DEFAULT_ALLOCATOR = {
+EXPORT Allocator DEFAULT_ALLOCATOR = {
     .alloc = dmalloc,
     .realloc = drealloc,
     .calloc = dcalloc,
@@ -438,7 +478,7 @@ void* tracking_calloc_i(TrackingAllocator* self, size_t nmemb, size_t size) {
     return ptr;
 }
 
-void* tracking_realloc_t(TrackingAllocator* self, void* ptr, size_t size) {
+void* tracking_realloc_i(TrackingAllocator* self, void* ptr, size_t size) {
     if(ptr == NULL) return ALLOC(self, size);
     da_foreach(pointer, &self->pointers) {
         //pointer is a void**
@@ -463,25 +503,25 @@ void tracking_free_i(TrackingAllocator* self, void* ptr) {
     panic("the pointer isn't in the Tracking Allocator\n");
 }
 
-TrackingAllocator tracking_create(Allocator* backing) {
+EXPORT TrackingAllocator tracking_create(Allocator* backing) {
     TrackingAllocator a = {0};
     a.allocator = backing;
     da_init(&a.pointers, a.allocator);
     a.alloc = (fun_alloc) tracking_alloc_i;
     a.calloc = (fun_calloc) tracking_calloc_i;
     a.free = (fun_free) tracking_free_i;
-    a.realloc = (fun_realloc) tracking_realloc_t;
+    a.realloc = (fun_realloc) tracking_realloc_i;
     return a;
 }
 
-void tracking_destroy(TrackingAllocator* self) {
+EXPORT void tracking_destroy(TrackingAllocator* self) {
     da_foreach(ptr, &self->pointers) {
         FREE(self->allocator, *ptr); 
     }
     da_free(&self->pointers);
 }
 
-String string_from(const char* str, Allocator* alloc) {
+EXPORT String string_from(const char* str, Allocator* alloc) {
     size_t l = strlen(str);
     if(l == 0) {
         return (String) {0};
@@ -494,32 +534,32 @@ String string_from(const char* str, Allocator* alloc) {
     string.len = l;
     return string;
 }
-String string_clone(String * str, Allocator* alloc) {
+EXPORT String string_clone(String * str, Allocator* alloc) {
     return da_clone(str, alloc);
 }
-char* from_string(String* str, Allocator* alloc) {
+EXPORT char* from_string(String* str, Allocator* alloc) {
     char* s = ALLOC(alloc, str->len + 1);
     memcpy(s, str->data, str->len);
     s[str->len] = '\0';
     return s;
 }
-void append_char(String* str, char ch) {
+EXPORT void append_char(String* str, char ch) {
     da_append(str, ch);
 }
-void append_cstr(String* str, char* s) {
+EXPORT void append_cstr(String* str, char* s) {
     size_t len = strlen(s); 
 
     for(size_t i = 0; i < len; i++) {
         da_append(str, s[i]);
     }
 }
-void append_string(String* str, String* val) {
+EXPORT void append_string(String* str, String* val) {
     da_foreach(c, val) {
         da_append(str, *c);
     }
 }
 
-bool string_compare(String a, String b) {
+EXPORT bool string_compare(String a, String b) {
     if(a.len != b.len) return false;
     for(size_t i = 0; i < a.len; i++) {
         if(a.data[i] != b.data[i]) return false;
@@ -527,17 +567,17 @@ bool string_compare(String a, String b) {
     return true;
 }
 
-bool str_cmp(const char* a, const char* b) {
+EXPORT bool str_cmp(const char* a, const char* b) {
     return strcmp(a, b) == 0;
 }
 
-String string_create(Allocator* alloc) {
+EXPORT String string_create(Allocator* alloc) {
     String s = {0};
     da_init(&s, alloc);
     return s;
 }
 
-size_t hm_hash_cstr(const char* s) {
+EXPORT size_t hm_hash_cstr(const char* s) {
     size_t hash = 1469598103934665603ULL;
     while (*s) {
         hash ^= (unsigned char)*s++;
@@ -546,16 +586,133 @@ size_t hm_hash_cstr(const char* s) {
     return hash;
 }
 
-size_t hm_hash_int(int s) {
+EXPORT size_t hm_hash_int(int s) {
     return s;
 }
 
-size_t hm_hash_string(String s) {
+EXPORT size_t hm_hash_string(String s) {
     size_t hash = 1469598103934665603ULL;
     da_foreach(ch, &s) {
         hash ^= (unsigned char)*ch;
         hash *= 1099511628211ULL;
     }
     return hash;
+}
+
+void* arena_alloc_i(ArenaAllocator* self, size_t size) {
+    if(self->offset+size <= self->cap) {
+        void* ptr = self->data+self->offset;
+        self->offset += size;
+        return ptr;
+    } else {
+        return NULL;
+    }
+}
+
+void* arena_calloc_i(ArenaAllocator* self, size_t nmemb, size_t size) {
+    void* ptr = ALLOC(self, nmemb*size);
+    if(ptr == NULL) return NULL;
+    memset(ptr, 0, size);
+    return ptr;
+}
+
+void* arena_realloc_i(ArenaAllocator* self, void* _, size_t size) {
+    return ALLOC(self, size);
+}
+
+void arena_free_i(ArenaAllocator* _, void* ptr) {
+    UNUSED(ptr);
+    printf("Arena Allocator doesn't support free");
+}
+
+
+EXPORT ArenaAllocator arena_create(Allocator* base, size_t size) {
+    ArenaAllocator alloc = {0};
+    alloc.allocator = base;
+    alloc.cap = size;
+    alloc.offset = 0;
+    alloc.data = (uint8_t*)ALLOC(base, size);
+
+
+    alloc.alloc = (fun_alloc) arena_alloc_i;
+    alloc.calloc = (fun_calloc) arena_calloc_i;
+    alloc.free = (fun_free) arena_free_i;
+    alloc.realloc = (fun_realloc) arena_realloc_i;
+    return alloc;
+}
+
+EXPORT void arena_free_all(ArenaAllocator* self) {
+    self->offset = 0;
+}
+
+EXPORT void arena_destroy(ArenaAllocator* self) {
+    FREE(self->allocator, self->data);
+    self->cap = 0;
+    self->offset = 0;
+    self->data = NULL;
+}
+
+void* scratch_alloc_i(ScratchAllocator* self, size_t size) {
+    if(self->last == NULL) {
+        self->first = ALLOC(self->allocator, sizeof(Region));
+        self->last = self->first;
+        self->first->offset=0;
+        self->first->cap = size>REGION_SIZE?size:REGION_SIZE;
+        self->first->next = NULL;
+        self->first->data = ALLOC(self->allocator, self->first->cap);
+    }
+    if(self->last->offset+size <= self->last->cap) {
+        void* ptr = self->last->data+self->last->offset;
+        self->last->offset += size;
+        return ptr;
+    } else {
+        self->last->next = ALLOC(self->allocator, sizeof(Region));
+        self->last->next->offset=0;
+        self->last->next->cap = size>REGION_SIZE?size:REGION_SIZE;
+        self->last->next->next = NULL;
+        self->last->next->data = ALLOC(self->allocator, self->last->next->cap);
+        self->last = self->last->next;
+        return ALLOC(self, size);
+    }
+}
+
+void* scratch_calloc_i(ScratchAllocator* self, size_t nmemb, size_t size) {
+    void* ptr = ALLOC(self, nmemb*size);
+    if(ptr == NULL) return NULL;
+    memset(ptr, 0, size);
+    return ptr;
+}
+
+void* scratch_realloc_i(ScratchAllocator* self, void* _, size_t size) {
+    return ALLOC(self, size);
+}
+
+void scratch_free_i(ScratchAllocator* _, void* ptr) {
+    UNUSED(ptr);
+    printf("Scratch Allocator doesn't support free");
+}
+
+
+EXPORT ScratchAllocator scratch_create(Allocator* base) {
+    ScratchAllocator alloc = {0};
+    alloc.allocator = base;
+
+    alloc.alloc = (fun_alloc) scratch_alloc_i;
+    alloc.calloc = (fun_calloc) scratch_calloc_i;
+    alloc.free = (fun_free) scratch_free_i;
+    alloc.realloc = (fun_realloc) scratch_realloc_i;
+    return alloc;
+}
+
+EXPORT void scratch_destroy(ScratchAllocator* self) {
+    self->last = NULL;
+    Region* s = self->first;
+    while(s!=NULL) {
+        Region* next = s->next;
+        FREE(self->allocator, s->data);
+        FREE(self->allocator, s);
+        s = next;
+    }
+    self->first = NULL;
 }
 #endif
