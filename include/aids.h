@@ -114,10 +114,23 @@ type* data;
 
 #define da_free(da)\
     do{\
-        FREE((da)->alloc, (da)->data);\
-        (da)->data = NULL;\
-        (da)->len = 0;\
-        (da)->cap = 0;\
+        if((da)->alloc) {\
+            FREE((da)->alloc, (da)->data);\
+            (da)->data = NULL;\
+            (da)->len = 0;\
+            (da)->cap = 0;\
+        }\
+    } while(0)
+
+#define da_free_call(da, c)\
+    do{\
+        if((da)->alloc) {\
+            da_foreach(b, da) c\
+            FREE((da)->alloc, (da)->data);\
+            (da)->data = NULL;\
+            (da)->len = 0;\
+            (da)->cap = 0;\
+        }\
     } while(0)
 
 #define da_foreach(it, da) for (typeof(*(da)->data)* it = (da)->data; it < (da)->data + (da)->len; ++it)
@@ -148,11 +161,11 @@ type* data;
 
 #define da_clone(da, allocator)\
     ({\
-        typeof(*da) n = {0};\
-        da_init(&n, allocator);\
-        da_append_da(&n, da);\
-        n;\
-    })
+     typeof(*da) n = {0};\
+     da_init(&n, allocator);\
+     da_append_da(&n, da);\
+     n;\
+     })
 
 #define da_pop(da) ((da)->data[--(da)->len])
 
@@ -163,14 +176,6 @@ type* data;
 #define da_get(da, i) (da)->data[i]
 #define da_set(da, i, v) (da)->data[i] = v
 
-#define da_free_call(da, c)\
-    do{\
-        da_foreach(b, da) c\
-        FREE((da)->alloc, (da)->data);\
-        (da)->data = NULL;\
-        (da)->len = 0;\
-        (da)->cap = 0;\
-    } while(0)
 
 #define da_remove_unordered(da, idx)\
     ({\
@@ -288,10 +293,10 @@ IMPORT size_t hm_hash_string(String);
 #endif
 
 #define _EQUALS(a, b) _Generic((a),\
-            const char*: str_cmp,\
-            String:string_compare\
-            COMPARE\
-            )(a, b)
+        const char*: str_cmp,\
+        String:string_compare\
+        COMPARE\
+        )(a, b)
 
 #define hm_set(hm, _nkey, _nvalue)\
     do {\
@@ -365,10 +370,10 @@ IMPORT size_t hm_hash_string(String);
      DA(typeof(((hm)->buckets[0].data->key))) _res = {0};\
      da_init(&_res, allocator);\
      for(size_t i = 0; i < HM_SIZE; i++){\
-        da_init_if_not(&(hm)->buckets[i], (hm)->alloc);\
-        da_foreach(v, &(hm)->buckets[i]) {\
-            da_append(&_res, v->key);\
-        }\
+     da_init_if_not(&(hm)->buckets[i], (hm)->alloc);\
+     da_foreach(v, &(hm)->buckets[i]) {\
+     da_append(&_res, v->key);\
+     }\
      }\
      _res;\
      })
@@ -378,10 +383,10 @@ IMPORT size_t hm_hash_string(String);
      DA(typeof(((hm)->buckets[0].data->value))) _res = {0};\
      da_init(&_res, allocator);\
      for(size_t i = 0; i < HM_SIZE; i++){\
-        da_init_if_not(&(hm)->buckets[i], (hm)->alloc);\
-        da_foreach(v, &(hm)->buckets[i]) {\
-            da_append(&_res, v->value);\
-        }\
+     da_init_if_not(&(hm)->buckets[i], (hm)->alloc);\
+     da_foreach(v, &(hm)->buckets[i]) {\
+     da_append(&_res, v->value);\
+     }\
      }\
      _res;\
      })
@@ -391,10 +396,10 @@ IMPORT size_t hm_hash_string(String);
      DA(typeof(*((hm)->buckets[0].data))) _res = {0};\
      da_init(&_res, allocator);\
      for(size_t i = 0; i < HM_SIZE; i++){\
-        da_init_if_not(&(hm)->buckets[i], (hm)->alloc);\
-        da_foreach(v, &(hm)->buckets[i]) {\
-            da_append(&_res, *v);\
-        }\
+     da_init_if_not(&(hm)->buckets[i], (hm)->alloc);\
+     da_foreach(v, &(hm)->buckets[i]) {\
+     da_append(&_res, *v);\
+     }\
      }\
      _res;\
      })
@@ -404,29 +409,30 @@ IMPORT size_t hm_hash_string(String);
 //
 #define StartClass(name)\
     typedef struct name name;\
-    struct name##_
+struct name##_
 
 //should error if the vaargs is more than one
 #define EndClass(name,...)\
     typedef struct name name;\
-    struct name {\
-        __VA_ARGS__;\
-        struct name##_;\
-    };
+struct name {\
+    __VA_ARGS__;\
+    struct name##_;\
+};
 
 #define constructor(name, ...)\
     void name##_new (name* self, ##__VA_ARGS__)
 
 #define new_stack(T, ...) ({\
-    T var;\
-    T##_new(&var, ##__VA_ARGS__);\
-    var;\
-})
+        T var={0};\
+        T##_new(&var, ##__VA_ARGS__);\
+        var;\
+        })
 #define new_heap(alloc, T, ...) ({\
-    T* var = ALLOC(alloc, sizeof(T));\
-    T##_new(var, ##__VA_ARGS__);\
-    var;\
-})
+        T* var = ALLOC(alloc, sizeof(T));\
+        *var = (T){0};\
+        T##_new(var, ##__VA_ARGS__);\
+        var;\
+        })
 
 #define SUPER(T, ...) \
     T##_new((T*) self, ##__VA_ARGS__);
@@ -612,7 +618,7 @@ void* arena_alloc_i(ArenaAllocator* self, size_t size) {
 void* arena_calloc_i(ArenaAllocator* self, size_t nmemb, size_t size) {
     void* ptr = ALLOC(self, nmemb*size);
     if(ptr == NULL) return NULL;
-    memset(ptr, 0, size);
+    memset(ptr, 0, nmemb*size);
     return ptr;
 }
 
@@ -679,7 +685,7 @@ void* scratch_alloc_i(ScratchAllocator* self, size_t size) {
 void* scratch_calloc_i(ScratchAllocator* self, size_t nmemb, size_t size) {
     void* ptr = ALLOC(self, nmemb*size);
     if(ptr == NULL) return NULL;
-    memset(ptr, 0, size);
+    memset(ptr, 0, nmemb*size);
     return ptr;
 }
 
