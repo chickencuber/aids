@@ -440,7 +440,13 @@ struct name {\
 #define METHOD(R, name, ...) \
     R(*name)(__VA_ARGS__)
 
-
+#define FORMAT(alloc, text, ...)\
+    ({\
+     int __size = snprintf(NULL, 0, text, ##__VA_ARGS__);\
+     char* __txt = ALLOC(alloc, __size+1);\
+     sprintf(__txt, text, ##__VA_ARGS__);\
+     __txt;\
+     })
 
 #endif
 
@@ -474,12 +480,28 @@ EXPORT Allocator DEFAULT_ALLOCATOR = {
 
 void* tracking_alloc_i(TrackingAllocator* self, size_t size) {
     void* ptr = ALLOC(self->allocator, size);
+    if(ptr == NULL) return NULL;
+    da_foreach(pointer, &self->pointers) {
+        //pointer is void**;
+        if(*pointer == NULL) {
+            *pointer = ptr;
+            return ptr;
+        }
+    }
     da_append(&self->pointers, ptr);
     return ptr;
 }
 
 void* tracking_calloc_i(TrackingAllocator* self, size_t nmemb, size_t size) {
     void* ptr = CALLOC(self->allocator, nmemb, size);
+    if(ptr == NULL) return NULL;
+    da_foreach(pointer, &self->pointers) {
+        //pointer is void**;
+        if(*pointer == NULL) {
+            *pointer = ptr;
+            return ptr;
+        }
+    }
     da_append(&self->pointers, ptr);
     return ptr;
 }
