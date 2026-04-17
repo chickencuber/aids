@@ -405,8 +405,9 @@ IMPORT size_t hm_hash_string(String);
      })
 //TASK(20260218-083256-729-n6-649): add more functions for hashmaps
 
+
 //WARNING requires `-fms-extensions` to function
-//
+#ifdef AIDS_CLASSES
 #define StartClass(name)\
     typedef struct name name;\
 struct name##_
@@ -440,6 +441,7 @@ struct name {\
 #define METHOD(R, name, ...) \
     R(*name)(__VA_ARGS__)
 #define CALL(self, name, ...) (self)->name((self), ##__VA_ARGS__)
+#endif
 
 #define FORMAT(alloc, text, ...)\
     ({\
