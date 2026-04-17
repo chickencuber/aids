@@ -439,6 +439,7 @@ struct name {\
 
 #define METHOD(R, name, ...) \
     R(*name)(__VA_ARGS__)
+#define CALL(self, name, ...) (self)->name((self), ##__VA_ARGS__)
 
 #define FORMAT(alloc, text, ...)\
     ({\
