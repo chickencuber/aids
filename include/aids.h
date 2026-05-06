@@ -443,9 +443,9 @@ IMPORT size_t hm_hash_string(String);
 
 #endif
 
+#ifdef AIDS_IMPLEMENTATION
 #ifndef AIDS_IMPLEMENTATION_H
 #define AIDS_IMPLEMENTATION_H
-#ifdef AIDS_IMPLEMENTATION
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
