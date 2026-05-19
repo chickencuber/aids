@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -O2 -c -fms-extensions -Wno-microsoft-anon-tag -Wno-incompatible-pointer-types -I./include/
+CFLAGS = -Wall -Wextra -O2 -c -fms-extensions -Wno-microsoft-anon-tag -I./include/
 SRC = src
 BUILD = build
 
