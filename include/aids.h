@@ -328,6 +328,7 @@ typedef DA(char) String;
 typedef SLICE(char) Str;
 
 IMPORT bool string_compare(String, String);
+IMPORT bool string_compare_cstr(String, const char*);
 IMPORT bool str_cmp(const char*, const char*);
 IMPORT String string_from(const char*, Allocator*);
 IMPORT String string_clone(String*, Allocator*);
@@ -638,6 +639,12 @@ EXPORT bool string_compare(String a, String b) {
             return false;
     }
     return true;
+}
+
+EXPORT bool string_compare_cstr(String str, const char* cstr) {
+    size_t len = strlen(cstr);
+    return str.len == len &&
+           (len == 0 || memcmp(str.data, cstr, len) == 0);
 }
 
 EXPORT bool str_cmp(const char* a, const char* b) { return strcmp(a, b) == 0; }
