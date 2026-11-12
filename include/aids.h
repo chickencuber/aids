@@ -32,7 +32,6 @@ typedef int64_t i64;
 #define BOOL "%s"
 #define FMTBOOL(s) (s ? "true" : "false")
 
-#define auto __auto_type
 
 // must be first in a struct
 #define IMPL_ALLOCATOR                                                         \
