@@ -699,7 +699,9 @@ void* arena_realloc_i(ArenaAllocator* self, void* _, size_t size) {
 
 void arena_free_i(ArenaAllocator* _, void* ptr) {
     UNUSED(ptr);
+#ifndef AIDS_SILENT_WARNINGS
     printf("Arena Allocator doesn't support free\n");
+#endif
 }
 
 EXPORT ArenaAllocator arena_create(Allocator* base, size_t size) {
@@ -763,7 +765,9 @@ void* scratch_realloc_i(ScratchAllocator* self, void* _, size_t size) {
 
 void scratch_free_i(ScratchAllocator* _, void* ptr) {
     UNUSED(ptr);
+#ifndef AIDS_SILENT_WARNINGS
     printf("Scratch Allocator doesn't support free\n");
+#endif
 }
 
 EXPORT ScratchAllocator scratch_create(Allocator* base) {
