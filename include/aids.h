@@ -76,6 +76,9 @@ IMPORT extern Allocator DEFAULT_ALLOCATOR;
         }                                                                      \
     } while (0)
 
+#define unreachable(...) \
+    panic("unreachable at %s:%d: " __VA_ARGS__, __FILE__, __LINE__)
+
 #define IMPL_SLICE(type)                                                       \
     type* data;                                                                \
     size_t len;
