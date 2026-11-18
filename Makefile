@@ -1,7 +1,8 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -O2 -c -I./include/
+CFLAGS = -Wall -Wextra -O2 -c -I./include/ -std=gnu23
 SRC = src
 BUILD = build
+
 
 SRCS := $(wildcard $(SRC)/*.c)
 OBJS := $(patsubst $(SRC)/%.c, $(BUILD)/%.o,$(SRCS))
@@ -18,7 +19,7 @@ $(BUILD):
 	mkdir -p $(BUILD)
 
 run: $(BUILD)/main
-	./$(BUILD)/main
+	./$(BUILD)/main $(ARGS)
 
 clean:
 	rm -rf $(BUILD)
