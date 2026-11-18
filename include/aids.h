@@ -1107,34 +1107,79 @@ EXPORT size_t hm_hash_string(String s) {
 EXPORT bool hm_equals_int(int a, int b) { return a == b; }
 
 /* ------------------------------------------------------------------------- */
+/* ------------------------------------------------------------------------- */
 /* Arena allocator                                                           */
 /* ------------------------------------------------------------------------- */
 
+/* Each allocation reserves an aligned header containing its requested size. */
+static size_t allocator_header_units(void) {
+    return (sizeof(size_t) + sizeof(max_align_t) - 1) /
+           sizeof(max_align_t);
+}
+
+static bool allocator_allocation_units(size_t size, size_t* units) {
+    size_t payload_units = size / sizeof(max_align_t);
+    if (size % sizeof(max_align_t) != 0)
+        payload_units++;
+
+    size_t header_units = allocator_header_units();
+    if (payload_units > SIZE_MAX - header_units)
+        return false;
+
+    *units = header_units + payload_units;
+    return true;
+}
+
+static size_t allocator_allocation_size(void* ptr) {
+    max_align_t* base = (max_align_t*)ptr - allocator_header_units();
+    return *(size_t*)base;
+}
+
 void* arena_alloc_i(ArenaAllocator* self, size_t size) {
-    size_t units = (size + sizeof(max_align_t) - 1) / sizeof(max_align_t);
+    if (!self->data)
+        return NULL;
 
-    if (self->offset + units <= self->cap) {
-        void* ptr = self->data + self->offset;
-        self->offset += units;
-        return ptr;
-    }
+    size_t units;
+    if (!allocator_allocation_units(size, &units))
+        return NULL;
 
-    return NULL;
+    if (self->offset > self->cap || units > self->cap - self->offset)
+        return NULL;
+
+    max_align_t* base = self->data + self->offset;
+    *(size_t*)base = size;
+    self->offset += units;
+
+    return base + allocator_header_units();
 }
 
 void* arena_calloc_i(ArenaAllocator* self, size_t nmemb, size_t size) {
-    void* ptr = ALLOC(self, nmemb * size);
+    if (size != 0 && nmemb > SIZE_MAX / size)
+        return NULL;
 
+    size_t total = nmemb * size;
+    void* ptr = ALLOC(self, total);
     if (!ptr)
         return NULL;
 
-    memset(ptr, 0, nmemb * size);
+    memset(ptr, 0, total);
     return ptr;
 }
 
-void* arena_realloc_i(ArenaAllocator* self, void* _, size_t size) {
-    UNUSED(_);
-    return ALLOC(self, size);
+void* arena_realloc_i(ArenaAllocator* self, void* ptr, size_t size) {
+    if (!ptr)
+        return ALLOC(self, size);
+
+    size_t old_size = allocator_allocation_size(ptr);
+    void* new_ptr = ALLOC(self, size);
+    if (!new_ptr)
+        return NULL;
+
+    size_t copy_size = old_size < size ? old_size : size;
+    if (copy_size)
+        memcpy(new_ptr, ptr, copy_size);
+
+    return new_ptr;
 }
 
 void arena_free_i(ArenaAllocator* _, void* ptr) {
@@ -1164,7 +1209,8 @@ EXPORT ArenaAllocator arena_create(Allocator* base, size_t size) {
 EXPORT void arena_free_all(ArenaAllocator* self) { self->offset = 0; }
 
 EXPORT void arena_destroy(ArenaAllocator* self) {
-    FREE(self->allocator, self->data);
+    if (self->data)
+        FREE(self->allocator, self->data);
     self->cap = 0;
     self->offset = 0;
     self->data = NULL;
@@ -1175,22 +1221,26 @@ EXPORT void arena_destroy(ArenaAllocator* self) {
 /* ------------------------------------------------------------------------- */
 
 void* scratch_alloc_i(ScratchAllocator* self, size_t size) {
-    size_t units = (size + sizeof(max_align_t) - 1) / sizeof(max_align_t);
+    size_t units;
+    if (!allocator_allocation_units(size, &units))
+        return NULL;
 
-    if (self->last == NULL || self->last->offset + units > self->last->cap) {
+    if (units > SIZE_MAX / sizeof(max_align_t))
+        return NULL;
 
+    if (self->last == NULL ||
+        self->last->offset > self->last->cap ||
+        units > self->last->cap - self->last->offset) {
         Region* region = ALLOC(self->allocator, sizeof(Region));
         if (!region)
             return NULL;
 
+        size_t default_cap = REGION_SIZE / sizeof(max_align_t);
         region->offset = 0;
-        region->cap = units > REGION_SIZE / sizeof(max_align_t)
-                          ? units
-                          : REGION_SIZE / sizeof(max_align_t);
-
+        region->cap = units > default_cap ? units : default_cap;
         region->next = NULL;
-        region->data =
-            ALLOC(self->allocator, region->cap * sizeof(max_align_t));
+        region->data = ALLOC(self->allocator,
+                             region->cap * sizeof(max_align_t));
 
         if (!region->data) {
             FREE(self->allocator, region);
@@ -1205,25 +1255,40 @@ void* scratch_alloc_i(ScratchAllocator* self, size_t size) {
         self->last = region;
     }
 
-    void* ptr = self->last->data + self->last->offset;
+    max_align_t* base = self->last->data + self->last->offset;
+    *(size_t*)base = size;
     self->last->offset += units;
 
-    return ptr;
+    return base + allocator_header_units();
 }
 
 void* scratch_calloc_i(ScratchAllocator* self, size_t nmemb, size_t size) {
-    void* ptr = ALLOC(self, nmemb * size);
+    if (size != 0 && nmemb > SIZE_MAX / size)
+        return NULL;
 
+    size_t total = nmemb * size;
+    void* ptr = ALLOC(self, total);
     if (!ptr)
         return NULL;
 
-    memset(ptr, 0, nmemb * size);
+    memset(ptr, 0, total);
     return ptr;
 }
 
-void* scratch_realloc_i(ScratchAllocator* self, void* _, size_t size) {
-    UNUSED(_);
-    return ALLOC(self, size);
+void* scratch_realloc_i(ScratchAllocator* self, void* ptr, size_t size) {
+    if (!ptr)
+        return ALLOC(self, size);
+
+    size_t old_size = allocator_allocation_size(ptr);
+    void* new_ptr = ALLOC(self, size);
+    if (!new_ptr)
+        return NULL;
+
+    size_t copy_size = old_size < size ? old_size : size;
+    if (copy_size)
+        memcpy(new_ptr, ptr, copy_size);
+
+    return new_ptr;
 }
 
 void scratch_free_i(ScratchAllocator* _, void* ptr) {
@@ -1260,6 +1325,5 @@ EXPORT void scratch_destroy(ScratchAllocator* self) {
     self->first = NULL;
     self->last = NULL;
 }
-
 #endif /* AIDS_IMPLEMENTATION_H */
 #endif /* AIDS_IMPLEMENTATION */

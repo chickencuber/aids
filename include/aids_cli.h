@@ -57,6 +57,7 @@ Rest* _argRest(ArgParser*, const char*, struct _argRestOpts);
 
 #ifdef AIDS_CLI_IMPLEMENTATION
 #ifndef AIDS_CLI_IMPLEMENTATION_H
+#define AIDS_CLI_IMPLEMENTATION_H
 typedef struct Flag Flag;
 struct Flag {
     const char* name;
@@ -128,7 +129,7 @@ bool* _argFlag(ArgParser* p, const char* name, const char* short_name,
                struct _argFlagOpts opts) {
     if (p->has_help) {
         append_cstr(&p->help_options,
-                    FORMAT(&p->temp, "  -%s, --%s", short_name, name));
+                    FORMAT(&p->temp, "    -%s, --%s", short_name, name));
 
         if (opts.desc) {
             append_cstr(&p->help_options, FORMAT(&p->temp, ":  %s", opts.desc));
@@ -150,7 +151,7 @@ Str* _argOption(ArgParser* p, const char* name, const char* short_name,
                 struct _argOptionOpts opts) {
     if (p->has_help) {
         append_cstr(&p->help_options,
-                    FORMAT(&p->temp, "  -%s, --%s", short_name, name));
+                    FORMAT(&p->temp, "    -%s, --%s", short_name, name));
 
         if (opts.default_value) {
             append_cstr(&p->help_options,
@@ -186,6 +187,7 @@ void argHelp(ArgParser* p) {
     p->help_args = string_create((Allocator*)&p->temp);
     p->help_options = string_create((Allocator*)&p->temp);
     p->has_help = true;
+    append_cstr(&p->help_options, FORMAT(&p->temp, "    -h, --help: Shows this menu\n"));
 }
 Rest* _argRest(ArgParser* p, const char* name, struct _argRestOpts opts) {
     if (p->has_rest)
@@ -215,8 +217,10 @@ void parseArgs(ArgParser* p, int argc, char** argv) {
                     printf("\n");
                 if (p->desc)
                     printf("\n%s\n", p->desc);
-                printf("\nArguments:\n" STRING, FMTSTRING(&p->help_args));
-                printf("\nOptions:\n" STRING, FMTSTRING(&p->help_options));
+                if (p->help_args.len > 0)
+                    printf("\nArguments:\n" STRING, FMTSTRING(&p->help_args));
+                if (p->help_options.len > 0)
+                    printf("\nOptions:\n" STRING, FMTSTRING(&p->help_options));
                 if (p->epilog)
                     printf("\n%s\n", p->epilog);
                 freeArgParser(p);
