@@ -1,3 +1,5 @@
+// this is temporary
+#pragma GCC system_header
 #ifndef AIDS_CLI_H
 #define AIDS_CLI_H
 #include "aids.h"
