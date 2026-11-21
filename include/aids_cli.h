@@ -9,39 +9,42 @@ struct _InitArgParserOpts {
     const char *desc, *epilog;
 };
 
-ArgParser* _initArgParser(Allocator*, const char*, struct _InitArgParserOpts);
+IMPORT ArgParser* _initArgParser(Allocator*, const char*,
+                                 struct _InitArgParserOpts);
 
 struct _argStringOpts {
     const char* desc;
 };
 
-Str* _argString(ArgParser*, const char*, struct _argStringOpts);
+IMPORT Str* _argString(ArgParser*, const char*, struct _argStringOpts);
 
 struct _argFlagOpts {
     const char* desc;
 };
 
-bool* _argFlag(ArgParser*, const char*, const char*, struct _argFlagOpts);
+IMPORT bool* _argFlag(ArgParser*, const char*, const char*,
+                      struct _argFlagOpts);
 
 struct _argOptionOpts {
     const char* desc;
     const char* default_value;
 };
 
-Str* _argOption(ArgParser*, const char*, const char*, struct _argOptionOpts);
+IMPORT Str* _argOption(ArgParser*, const char*, const char*,
+                       struct _argOptionOpts);
 
-void freeArgParser(ArgParser*);
+IMPORT void freeArgParser(ArgParser*);
 
-void parseArgs(ArgParser*, int, char**);
+IMPORT void parseArgs(ArgParser*, int, char**);
 
 typedef DA(Str) Rest;
 
-void argHelp(ArgParser*);
+IMPORT void argHelp(ArgParser*);
 
 struct _argRestOpts {
     const char* desc;
 };
-Rest* _argRest(ArgParser*, const char*, struct _argRestOpts);
+IMPORT Rest* _argRest(ArgParser*, const char*, struct _argRestOpts);
 
 #define argString(parser, name, ...)                                           \
     _argString(parser, name, (struct _argStringOpts){__VA_ARGS__})
@@ -90,8 +93,8 @@ struct ArgParser {
     bool has_help;
 };
 
-ArgParser* _initArgParser(Allocator* alloc, const char* prog,
-                          struct _InitArgParserOpts opts) {
+EXPORT ArgParser* _initArgParser(Allocator* alloc, const char* prog,
+                                 struct _InitArgParserOpts opts) {
     ArgParser* p = ALLOC(alloc, sizeof(ArgParser));
     *p = (ArgParser){
         .temp = scratch_create(alloc),
@@ -105,12 +108,13 @@ ArgParser* _initArgParser(Allocator* alloc, const char* prog,
     return p;
 }
 
-void freeArgParser(ArgParser* p) {
+EXPORT void freeArgParser(ArgParser* p) {
     scratch_destroy(&p->temp);
     FREE(p->alloc, p);
 }
 
-Str* _argString(ArgParser* p, const char* name, struct _argStringOpts opts) {
+EXPORT Str* _argString(ArgParser* p, const char* name,
+                       struct _argStringOpts opts) {
     if (p->has_help) {
         append_cstr(&p->help_usage, FORMAT(&p->temp, "<%s> ", name));
         if (opts.desc) {
@@ -127,8 +131,8 @@ Str* _argString(ArgParser* p, const char* name, struct _argStringOpts opts) {
     return (Str*)arg.ptr;
 }
 
-bool* _argFlag(ArgParser* p, const char* name, const char* short_name,
-               struct _argFlagOpts opts) {
+EXPORT bool* _argFlag(ArgParser* p, const char* name, const char* short_name,
+                      struct _argFlagOpts opts) {
     if (p->has_help) {
         append_cstr(&p->help_options,
                     FORMAT(&p->temp, "    -%s, --%s", short_name, name));
@@ -149,8 +153,8 @@ bool* _argFlag(ArgParser* p, const char* name, const char* short_name,
     return f.ptr;
 }
 
-Str* _argOption(ArgParser* p, const char* name, const char* short_name,
-                struct _argOptionOpts opts) {
+EXPORT Str* _argOption(ArgParser* p, const char* name, const char* short_name,
+                       struct _argOptionOpts opts) {
     if (p->has_help) {
         append_cstr(&p->help_options,
                     FORMAT(&p->temp, "    -%s, --%s", short_name, name));
@@ -182,16 +186,18 @@ Str* _argOption(ArgParser* p, const char* name, const char* short_name,
     return f.ptr;
 }
 
-void argHelp(ArgParser* p) {
+EXPORT void argHelp(ArgParser* p) {
     if (p->has_help)
         return;
     p->help_usage = string_create((Allocator*)&p->temp);
     p->help_args = string_create((Allocator*)&p->temp);
     p->help_options = string_create((Allocator*)&p->temp);
     p->has_help = true;
-    append_cstr(&p->help_options, FORMAT(&p->temp, "    -h, --help: Shows this menu\n"));
+    append_cstr(&p->help_options,
+                FORMAT(&p->temp, "    -h, --help: Shows this menu\n"));
 }
-Rest* _argRest(ArgParser* p, const char* name, struct _argRestOpts opts) {
+EXPORT Rest* _argRest(ArgParser* p, const char* name,
+                      struct _argRestOpts opts) {
     if (p->has_rest)
         return &p->rest;
     if (p->has_help) {
@@ -206,9 +212,12 @@ Rest* _argRest(ArgParser* p, const char* name, struct _argRestOpts opts) {
     return &p->rest;
 }
 
-void parseArgs(ArgParser* p, int argc, char** argv) {
+EXPORT void parseArgs(ArgParser* p, int argc, char** argv) {
     if (p->has_help) {
         for (int i = 1; i < argc; i++) {
+            if (strcmp(argv[i], "--") == 0) {
+                break;
+            }
             if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
                 printf("Usage: %s %s" STRING, p->prog,
                        p->flags.len > 0 ? "[Options] " : "",
