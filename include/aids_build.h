@@ -22,6 +22,8 @@
 #endif
 #endif
 
+#define auto __auto_type
+
 #define EXECUTABLE(name) name _EXE
 #define OBJECT(name) name _OBJ
 
