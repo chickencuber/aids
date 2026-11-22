@@ -31,13 +31,15 @@
 #define SOURCES(...) (const char*[]){__VA_ARGS__ __VA_OPT__(, ) ""}
 #define FLAGS(...) (const char*[]){__VA_ARGS__ __VA_OPT__(, ) ""}
 #include "aids.h"
+#include "aids_fs.h"
 #include <libgen.h>
 
 void _rebuild_yourself(const char* file, int argc, char** argv);
 bool needs_rebuild(const char* output, const char* sources[],
                    const char* deps[]);
-bool build(const char* output, const char* sources[], const char* deps[],
+bool build(const char* cc, const char* output, const char* sources[], const char* deps[],
            const char* flags[]);
+#define build_cc(...) build(AIDS_BUILD_COMPILER,##__VA_ARGS__)
 #define rebuild_yourself(argc, argv) _rebuild_yourself(__FILE__, argc, argv);
 #endif
 
@@ -74,12 +76,12 @@ bool needs_rebuild(const char* output, const char* sources[],
     return false;
 }
 
-bool build(const char* output, const char* sources[], const char* deps[],
+bool build(const char* cc, const char* output, const char* sources[], const char* deps[],
            const char* flags[]) {
     if (!needs_rebuild(output, sources, deps))
         return false;
     auto alloc = &DEFAULT_ALLOCATOR;
-    CommandBuilder cmd = command_create(alloc, AIDS_BUILD_COMPILER);
+    CommandBuilder cmd = command_create(alloc, cc);
 
     for (size_t i = 0; sources[i] && sources[i][0]; i++) {
         command_arg_cstr(&cmd, sources[i]);
@@ -106,7 +108,7 @@ void _rebuild_yourself(const char* file, int argc, char** argv) {
         flags = FLAGS();
     }
 
-    if (!build(argv[0], SOURCES(file), DEPS(__FILE__), flags))
+    if (!build_cc(argv[0], SOURCES(file), DEPS(__FILE__), flags))
         return;
     auto alloc = &DEFAULT_ALLOCATOR;
     CommandBuilder run = command_create(alloc, argv[0]);
