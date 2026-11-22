@@ -4,6 +4,7 @@
 #ifndef AIDS
 #define AIDS
 
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -436,6 +437,10 @@ IMPORT char* from_string(String*, Allocator*);
 IMPORT void append_char(String*, char);
 IMPORT void append_cstr(String*, char*);
 IMPORT void append_string(String*, String*);
+IMPORT void string_appendf(String* str, const char* fmt, ...)
+    __attribute__((format(printf, 2, 3)));
+IMPORT void string_vappendf(String* str, const char* fmt, va_list args)
+    __attribute__((format(printf, 2, 0)));
 
 /* Str construction */
 IMPORT Str str_from_cstr(const char*);
@@ -909,6 +914,32 @@ EXPORT void append_string(String* str, String* val) {
     str->len += val->len;
 }
 
+
+EXPORT void string_vappendf(String* str, const char* fmt, va_list args) {
+    va_list copy;
+    va_copy(copy, args);
+
+    int len = vsnprintf(NULL, 0, fmt, copy);
+    va_end(copy);
+
+    if (len < 0)
+        return;
+
+    size_t old_len = str->len;
+    da_reserve(str, old_len + (size_t)len + 1);
+
+    vsnprintf(str->data + old_len, (size_t)len + 1, fmt, args);
+
+    str->len += (size_t)len;
+}
+
+EXPORT void string_appendf(String* str, const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    string_vappendf(str, fmt, args);
+    va_end(args);
+}
+
 EXPORT bool string_compare(String a, String b) {
     return a.len == b.len && (a.len == 0 || memcmp(a.data, b.data, a.len) == 0);
 }
@@ -1379,7 +1410,6 @@ static void command_append_quoted(String* out, Str arg) {
 
     append_cstr(out, "'");
 }
-
 
 EXPORT String command_string(CommandBuilder* cmd, Allocator* alloc) {
     String out = string_create(alloc);
