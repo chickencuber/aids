@@ -1,4 +1,5 @@
-//TASK(20261121-183008-366-n6-670f7758): make this compile without error when its -Wpedantic
+// TASK(20261121-183008-366-n6-670f7758): make this compile without error when
+// its -Wpedantic
 #pragma GCC system_header
 #ifndef AIDS
 #define AIDS
@@ -9,9 +10,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifndef _WIN32
-#include <sys/wait.h>
-#endif
 
 #ifdef _WIN32
 #define EXPORT __declspec(dllexport)
@@ -1382,6 +1380,7 @@ static void command_append_quoted(String* out, Str arg) {
     append_cstr(out, "'");
 }
 
+
 EXPORT String command_string(CommandBuilder* cmd, Allocator* alloc) {
     String out = string_create(alloc);
 
@@ -1394,6 +1393,10 @@ EXPORT String command_string(CommandBuilder* cmd, Allocator* alloc) {
 
     return out;
 }
+
+#ifndef _WIN32
+#include <sys/wait.h>
+#endif
 
 EXPORT int command_run(CommandBuilder* cmd) {
     String str = command_string(cmd, cmd->alloc);
