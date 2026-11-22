@@ -78,8 +78,8 @@ IMPORT extern Allocator DEFAULT_ALLOCATOR;
         exit(1);                                                               \
     } while (0)
 
-#define unreachable() panic("unreachable at %s:%d", __FILE__, __LINE__)
-#define todo() panic("todo at %s:%d", __FILE__, __LINE__)
+#define unreachable() panic("unreachable at %s:%d\n", __FILE__, __LINE__)
+#define todo() panic("todo at %s:%d\n", __FILE__, __LINE__)
 
 #define assert(c, ...)                                                         \
     do {                                                                       \
