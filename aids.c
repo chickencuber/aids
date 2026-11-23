@@ -58,7 +58,10 @@ int main(int argc, char** argv) {
     if (run) {
         auto alloc = &DEFAULT_ALLOCATOR;
         auto cmd = command_create(alloc, EXECUTABLE(BUILD "main"));
-        da_foreach(s, rest) { command_arg(&cmd, *s); }
+        da_foreach(s, rest) { 
+            String c = str_to_string(*s, alloc);
+            command_arg(&cmd, c); 
+        }
         command_run(&cmd);
         command_destroy(&cmd);
     }

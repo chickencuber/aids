@@ -475,13 +475,17 @@ IMPORT String str_to_string(Str, Allocator*);
 /* ------------------------------------------------------------------------- */
 typedef struct {
     const char* program;
-    DA(Str) args;
+    DA(String) args;
     Allocator* alloc;
 } CommandBuilder;
 
 IMPORT CommandBuilder command_create(Allocator* alloc, const char* program);
-IMPORT void command_arg(CommandBuilder* cmd, Str arg);
+IMPORT void command_arg(CommandBuilder* cmd, String arg);
 IMPORT void command_arg_cstr(CommandBuilder* cmd, const char* arg);
+IMPORT void command_argf(CommandBuilder* cmd, const char* fmt, ...)
+    __attribute__((format(printf, 2, 3)));
+IMPORT void command_vargf(CommandBuilder* cmd, const char* fmt, va_list args); 
+    __attribute__((format(printf, 2, 0)));
 IMPORT void command_clear(CommandBuilder* cmd);
 IMPORT void command_destroy(CommandBuilder* cmd);
 
@@ -914,7 +918,6 @@ EXPORT void append_string(String* str, String* val) {
     memcpy(str->data + str->len, val->data, val->len);
     str->len += val->len;
 }
-
 
 EXPORT void string_vappendf(String* str, const char* fmt, va_list args) {
     va_list copy;
@@ -1373,6 +1376,19 @@ EXPORT void scratch_destroy(ScratchAllocator* self) {
     self->last = NULL;
 }
 
+EXPORT void command_argf(CommandBuilder* cmd, const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    command_vargf(cmd, fmt, args);
+    va_end(args);
+}
+
+EXPORT void command_vargf(CommandBuilder* cmd, const char* fmt, va_list args) {
+    String s = string_create(cmd->alloc);
+    string_vappendf(&s, fmt, args);
+    command_arg(cmd, s);
+}
+
 EXPORT CommandBuilder command_create(Allocator* alloc, const char* program) {
     CommandBuilder cmd = {
         .program = program,
@@ -1383,30 +1399,36 @@ EXPORT CommandBuilder command_create(Allocator* alloc, const char* program) {
     return cmd;
 }
 
-EXPORT void command_arg(CommandBuilder* cmd, Str arg) {
+EXPORT void command_arg(CommandBuilder* cmd, String arg) {
     da_append(&cmd->args, arg);
 }
 
 EXPORT void command_arg_cstr(CommandBuilder* cmd, const char* arg) {
-    command_arg(cmd, str_from_cstr(arg));
+    command_arg(cmd, string_from(arg, cmd->alloc));
 }
 
-EXPORT void command_clear(CommandBuilder* cmd) { cmd->args.len = 0; }
+EXPORT void command_clear(CommandBuilder* cmd) {
+    for (size_t i = 0; i < cmd->args.len; i++)
+        da_free(&cmd->args.data[i]);
+    da_free(&cmd->args);
+}
 
 EXPORT void command_destroy(CommandBuilder* cmd) {
+    command_clear(cmd);
     da_free(&cmd->args);
+
     cmd->program = NULL;
     cmd->alloc = NULL;
 }
+
 static void command_append_quoted(String* out, Str arg) {
     append_cstr(out, "'");
 
     for (size_t i = 0; i < arg.len; i++) {
-        if (arg.data[i] == '\'') {
+        if (arg.data[i] == '\'')
             append_cstr(out, "'\\''");
-        } else {
+        else
             da_append(out, arg.data[i]);
-        }
     }
 
     append_cstr(out, "'");
@@ -1419,7 +1441,10 @@ EXPORT String command_string(CommandBuilder* cmd, Allocator* alloc) {
 
     for (size_t i = 0; i < cmd->args.len; i++) {
         append_cstr(&out, " ");
-        command_append_quoted(&out, cmd->args.data[i]);
+        command_append_quoted(
+            &out,
+            str_from_parts(cmd->args.data[i].data, cmd->args.data[i].len)
+        );
     }
 
     return out;
@@ -1436,6 +1461,7 @@ EXPORT int command_run(CommandBuilder* cmd) {
 #ifndef AIDS_SILENT_COMMAND
     printf("running '%s'\n", s);
 #endif
+
     int result = system(s);
 
     FREE(cmd->alloc, s);
@@ -1456,5 +1482,6 @@ EXPORT int command_run(CommandBuilder* cmd) {
     return -1;
 #endif
 }
+
 #endif /* AIDS_IMPLEMENTATION_H */
 #endif /* AIDS_IMPLEMENTATION */
