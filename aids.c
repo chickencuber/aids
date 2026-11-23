@@ -20,8 +20,7 @@ int main(int argc, char** argv) {
     auto parser = initArgParser(&DEFAULT_ALLOCATOR, "aids-build");
     argHelp(parser);
     argString(parser, "subcommand", .desc = "run or clean or build");
-    Rest* rest = argRest(parser, "args", .desc = "commmand passthrough");
-    ;
+    ArgList* rest = argRest(parser, "args", .desc = "commmand passthrough");
     parseArgs(parser, argc, argv);
 
     bool run = false;
@@ -42,19 +41,19 @@ int main(int argc, char** argv) {
         directory_create("build");
     }
     build_cc(OBJECT(BUILD "aids"), SOURCES(SRC "aids.c"), DEPS(INCLUDE "aids.h"),
-          CFLAGS);
+          CFLAGS, NULL);
     build_cc(OBJECT(BUILD "aids_cli"), SOURCES(SRC "aids_cli.c"),
-          DEPS(INCLUDE "aids.h", INCLUDE "aids_cli.h"), CFLAGS);
+          DEPS(INCLUDE "aids.h", INCLUDE "aids_cli.h"), CFLAGS, NULL);
 
     build_cc(OBJECT(BUILD "aids_fs"), SOURCES(SRC "aids_fs.c"),
-          DEPS(INCLUDE "aids.h", INCLUDE "aids_fs.h"), CFLAGS);
+          DEPS(INCLUDE "aids.h", INCLUDE "aids_fs.h"), CFLAGS, NULL);
 
     build_cc(OBJECT(BUILD "main"), SOURCES(SRC "main.c"),
-          DEPS(INCLUDE "aids.h", INCLUDE "aids_cli.h"), CFLAGS);
+          DEPS(INCLUDE "aids.h", INCLUDE "aids_cli.h"), CFLAGS, NULL);
     build_cc(EXECUTABLE(BUILD "main"),
           SOURCES(OBJECT(BUILD "aids"), OBJECT(BUILD "aids_cli"),
                   OBJECT(BUILD "main"), OBJECT(BUILD"aids_fs")),
-          DEPS(INCLUDE "aids.h", INCLUDE "aids_cli.h"), FLAGS());
+          DEPS(INCLUDE "aids.h", INCLUDE "aids_cli.h"), FLAGS(), NULL);
     if (run) {
         auto alloc = &DEFAULT_ALLOCATOR;
         auto cmd = command_create(alloc, EXECUTABLE(BUILD "main"));

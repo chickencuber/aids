@@ -19,7 +19,9 @@ int main(int argc, char** argv) {
     Str* output = argOption(parser, "output", "o", .default_value = "a.out",
                             .desc = "Output file");
 
-    Rest* rest = argRest(parser, "files", .desc = "Additional files to process");;
+    ArgList* rest = argRest(parser, "files", .desc = "Additional files to process");;
+
+    ArgList* other = argList(parser, "file", "f");
 
     parseArgs(parser, argc, argv);
 
@@ -32,6 +34,9 @@ int main(int argc, char** argv) {
 
     printf("Rest arguments:\n");
     da_foreach(arg, rest) { printf("  " STRING "\n", FMTSTRING(arg)); }
+
+    printf("Other arguments:\n");
+    da_foreach(arg, other) { printf("  " STRING "\n", FMTSTRING(arg)); }
 
     freeArgParser(parser);
     return 0;

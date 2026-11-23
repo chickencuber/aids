@@ -1,4 +1,5 @@
-//TASK(20261121-183008-366-n6-670f7758): make this compile without error when its -Wpedantic
+// TASK(20261121-183008-366-n6-670f7758): make this compile without error when
+// its -Wpedantic
 #pragma GCC system_header
 #ifndef AIDS_CLI_H
 #define AIDS_CLI_H
@@ -25,6 +26,15 @@ struct _argFlagOpts {
 IMPORT bool* _argFlag(ArgParser*, const char*, const char*,
                       struct _argFlagOpts);
 
+struct _argListOpts {
+    const char* desc;
+};
+
+typedef DA(Str) ArgList;
+
+IMPORT ArgList* _argList(ArgParser*, const char*, const char*,
+                         struct _argListOpts);
+
 struct _argOptionOpts {
     const char* desc;
     const char* default_value;
@@ -37,19 +47,20 @@ IMPORT void freeArgParser(ArgParser*);
 
 IMPORT void parseArgs(ArgParser*, int, char**);
 
-typedef DA(Str) Rest;
-
 IMPORT void argHelp(ArgParser*);
 
 struct _argRestOpts {
     const char* desc;
 };
-IMPORT Rest* _argRest(ArgParser*, const char*, struct _argRestOpts);
+IMPORT ArgList* _argRest(ArgParser*, const char*, struct _argRestOpts);
 
 #define argString(parser, name, ...)                                           \
     _argString(parser, name, (struct _argStringOpts){__VA_ARGS__})
 #define argFlag(parser, name, shortname, ...)                                  \
     _argFlag(parser, name, shortname, (struct _argFlagOpts){__VA_ARGS__})
+
+#define argList(parser, name, shortname, ...)                                  \
+    _argList(parser, name, shortname, (struct _argListOpts){__VA_ARGS__})
 
 #define argOption(parser, name, shortname, ...)                                \
     _argOption(parser, name, shortname, (struct _argOptionOpts){__VA_ARGS__})
@@ -64,10 +75,17 @@ IMPORT Rest* _argRest(ArgParser*, const char*, struct _argRestOpts);
 #ifndef AIDS_CLI_IMPLEMENTATION_H
 #define AIDS_CLI_IMPLEMENTATION_H
 typedef struct Flag Flag;
+
+typedef enum {
+    FLAG_STR,
+    FLAG_BOOL,
+    FLAG_LIST,
+} FlagKind;
 struct Flag {
     const char* name;
     const char* short_name;
-    bool is_bool;
+    FlagKind kind;
+    bool is_used;
     void* ptr;
 };
 
@@ -86,7 +104,7 @@ struct ArgParser {
     const char *prog, *desc, *epilog;
     const char* rest_name;
     bool has_rest;
-    Rest rest;
+    ArgList rest;
     Flags flags;
     Args args;
     String help_options, help_usage, help_args; // might not exist
@@ -116,10 +134,9 @@ EXPORT void freeArgParser(ArgParser* p) {
 EXPORT Str* _argString(ArgParser* p, const char* name,
                        struct _argStringOpts opts) {
     if (p->has_help) {
-        append_cstr(&p->help_usage, FORMAT(&p->temp, "<%s> ", name));
+        string_appendf(&p->help_usage, "<%s> ", name);
         if (opts.desc) {
-            append_cstr(&p->help_args,
-                        FORMAT(&p->temp, "    %s: %s\n", name, opts.desc));
+            string_appendf(&p->help_args, "    %s: %s\n", name, opts.desc);
         }
     }
     Arg arg = {
@@ -134,17 +151,16 @@ EXPORT Str* _argString(ArgParser* p, const char* name,
 EXPORT bool* _argFlag(ArgParser* p, const char* name, const char* short_name,
                       struct _argFlagOpts opts) {
     if (p->has_help) {
-        append_cstr(&p->help_options,
-                    FORMAT(&p->temp, "    -%s, --%s", short_name, name));
+        string_appendf(&p->help_options, "    -%s, --%s", short_name, name);
 
         if (opts.desc) {
-            append_cstr(&p->help_options, FORMAT(&p->temp, ":  %s", opts.desc));
+            string_appendf(&p->help_options, ": %s", opts.desc);
         }
 
         append_cstr(&p->help_options, "\n");
     }
     Flag f = {
-        .is_bool = true,
+        .kind = FLAG_BOOL,
         .ptr = CALLOC(&p->temp, 1, sizeof(bool)),
         .name = name,
         .short_name = short_name,
@@ -156,22 +172,22 @@ EXPORT bool* _argFlag(ArgParser* p, const char* name, const char* short_name,
 EXPORT Str* _argOption(ArgParser* p, const char* name, const char* short_name,
                        struct _argOptionOpts opts) {
     if (p->has_help) {
-        append_cstr(&p->help_options,
-                    FORMAT(&p->temp, "    -%s, --%s", short_name, name));
+        string_appendf(&p->help_options, "    -%s, --%s <value>", short_name,
+                       name);
 
         if (opts.default_value) {
-            append_cstr(&p->help_options,
-                        FORMAT(&p->temp, " (default: %s)", opts.default_value));
+            string_appendf(&p->help_options, " (default: %s)",
+                           opts.default_value);
         }
 
         if (opts.desc) {
-            append_cstr(&p->help_options, FORMAT(&p->temp, ":  %s", opts.desc));
+            string_appendf(&p->help_options, ": %s", opts.desc);
         }
 
         append_cstr(&p->help_options, "\n");
     }
     Flag f = {
-        .is_bool = false,
+        .kind = FLAG_STR,
         .ptr = CALLOC(&p->temp, 1, sizeof(String)),
         .name = name,
         .short_name = short_name,
@@ -186,6 +202,27 @@ EXPORT Str* _argOption(ArgParser* p, const char* name, const char* short_name,
     return f.ptr;
 }
 
+EXPORT ArgList* _argList(ArgParser* p, const char* name, const char* short_name,
+                         struct _argListOpts opts) {
+    if (p->has_help) {
+        string_appendf(&p->help_options, "    -%s, --%s <value>...", short_name,
+                       name);
+        if (opts.desc) {
+            string_appendf(&p->help_options, ": %s", opts.desc);
+        }
+        append_cstr(&p->help_options, "\n");
+    }
+    Flag f = {
+        .kind = FLAG_LIST,
+        .ptr = CALLOC(&p->temp, 1, sizeof(ArgList)),
+        .name = name,
+        .short_name = short_name,
+    };
+    da_init((ArgList*)f.ptr, &p->temp);
+    da_append(&p->flags, f);
+    return f.ptr;
+}
+
 EXPORT void argHelp(ArgParser* p) {
     if (p->has_help)
         return;
@@ -193,17 +230,15 @@ EXPORT void argHelp(ArgParser* p) {
     p->help_args = string_create((Allocator*)&p->temp);
     p->help_options = string_create((Allocator*)&p->temp);
     p->has_help = true;
-    append_cstr(&p->help_options,
-                FORMAT(&p->temp, "    -h, --help: Shows this menu\n"));
+    append_cstr(&p->help_options, "    -h, --help: Shows this menu\n");
 }
-EXPORT Rest* _argRest(ArgParser* p, const char* name,
-                      struct _argRestOpts opts) {
+EXPORT ArgList* _argRest(ArgParser* p, const char* name,
+                         struct _argRestOpts opts) {
     if (p->has_rest)
         return &p->rest;
     if (p->has_help) {
         if (opts.desc) {
-            append_cstr(&p->help_args,
-                        FORMAT(&p->temp, "    %s: %s\n", name, opts.desc));
+            string_appendf(&p->help_args, "    %s...: %s\n", name, opts.desc);
         }
     }
     da_init(&p->rest, &p->temp);
@@ -257,9 +292,14 @@ EXPORT void parseArgs(ArgParser* p, int argc, char** argv) {
                     (name[1] != '-' && name[1] != '\0' && name[2] == '\0' &&
                      name[1] == flag->short_name[0])) {
 
-                    if (flag->is_bool) {
+                    switch (flag->kind) {
+                    case FLAG_BOOL:
                         *(bool*)flag->ptr = true;
-                    } else {
+                        break;
+                    case FLAG_STR: {
+                        assert(!flag->is_used, "Flag %s already used\n%s", name,
+                               p->has_help ? "\nUse -h or --help for help.\n"
+                                           : "");
                         assert(i + 1 < argc, "Missing value for option: %s\n%s",
                                name,
                                p->has_help ? "\nUse -h or --help for help.\n"
@@ -268,8 +308,17 @@ EXPORT void parseArgs(ArgParser* p, int argc, char** argv) {
                         String* value = flag->ptr;
                         value->len = 0;
                         append_cstr(value, argv[++i]);
+                        flag->is_used = true;
+                    } break;
+                    case FLAG_LIST: {
+                        assert(i + 1 < argc, "Missing value for option: %s\n%s",
+                               name,
+                               p->has_help ? "\nUse -h or --help for help.\n"
+                                           : "");
+                        ArgList* v = flag->ptr;
+                        da_append(v, str_from_cstr(argv[++i]));
+                    } break;
                     }
-
                     found = true;
                     break;
                 }

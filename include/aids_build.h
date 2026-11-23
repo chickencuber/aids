@@ -38,7 +38,7 @@ void _rebuild_yourself(const char* file, int argc, char** argv);
 bool needs_rebuild(const char* output, const char* sources[],
                    const char* deps[]);
 bool build(const char* cc, const char* output, const char* sources[], const char* deps[],
-           const char* flags[]);
+           const char* flags[], int* error);
 #define build_cc(...) build(AIDS_BUILD_COMPILER,##__VA_ARGS__)
 #define rebuild_yourself(argc, argv) _rebuild_yourself(__FILE__, argc, argv);
 #endif
@@ -77,7 +77,7 @@ bool needs_rebuild(const char* output, const char* sources[],
 }
 
 bool build(const char* cc, const char* output, const char* sources[], const char* deps[],
-           const char* flags[]) {
+           const char* flags[], int* error) {
     if (!needs_rebuild(output, sources, deps))
         return false;
     auto alloc = &DEFAULT_ALLOCATOR;
@@ -92,7 +92,8 @@ bool build(const char* cc, const char* output, const char* sources[], const char
     for (size_t i = 0; flags[i] && flags[i][0]; i++) {
         command_arg_cstr(&cmd, flags[i]);
     }
-    command_run(&cmd);
+    int e = command_run(&cmd);
+    if(error != NULL) *error = e;
     command_destroy(&cmd);
     return true;
 }
@@ -108,8 +109,10 @@ void _rebuild_yourself(const char* file, int argc, char** argv) {
         flags = FLAGS();
     }
 
-    if (!build_cc(argv[0], SOURCES(file), DEPS(__FILE__), flags))
+    int error;
+    if (!build_cc(argv[0], SOURCES(file), DEPS(__FILE__), flags, &error))
         return;
+    if(error != 0) return;
     auto alloc = &DEFAULT_ALLOCATOR;
     CommandBuilder run = command_create(alloc, argv[0]);
     for(int i = 1; i < argc; i++) {
